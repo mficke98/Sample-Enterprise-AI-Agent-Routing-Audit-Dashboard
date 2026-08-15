@@ -2,6 +2,7 @@ import { config, TASK_STATUS } from '../config.js';
 import { emit, EVENTS } from '../lib/bus.js';
 import { createRng } from '../lib/rng.js';
 import { simulateExecution, OUTCOME, microsToUsd } from './executor.js';
+import { selectFallbackAgent } from './router.js';
 import { toPublicTask } from './serializers.js';
 
 /**
@@ -105,19 +106,73 @@ export async function executeTask(taskId, { registry, taskStore, rng = sharedRng
     return taskStore.get(taskId);
   }
 
-  // Failure handling. Fallback re-routing is layered on top of this in
-  // handleFailure(), keeping the success path above untouched.
-  return handleFailure(task, attempt, { registry, taskStore });
+  // Failure handling, including fallback re-routing.
+  return handleFailure(task, attempt, { registry, taskStore, rng, sleep });
 }
 
 /**
  * What happens when an attempt fails.
  *
- * In this commit: the task terminates as FAILED. The fallback re-routing
- * requirement extends exactly this function.
+ * Requirement: on ERROR or TIMEOUT, automatically re-route the task to the
+ * General Secondary Agent and flag the record `fallback_applied: true`.
+ *
+ * Two independent loop guards, because an auto-retry that can retry itself is
+ * how you build an infinite billing loop:
+ *   1. `fallback_applied` -- a task falls back at most once, ever.
+ *   2. selectFallbackAgent() refuses to route a GENERAL agent to itself.
+ *
+ * The failed attempt stays in `attempts`, so the audit trail shows both the
+ * specialist's failure and the fallback's outcome, with the cost of each.
  */
-function handleFailure(task, attempt, { taskStore }) {
-  finaliseFailure(task, taskStore, attempt.error);
+async function handleFailure(task, attempt, { registry, taskStore, rng, sleep }) {
+  // Already fell back once -- this failure is terminal.
+  if (task.fallback_applied) {
+    return terminate(task, taskStore, attempt.error);
+  }
+
+  const { agent: fallbackAgent, note } = selectFallbackAgent(task.type, {
+    registry,
+    failedAgentId: attempt.agent_id,
+  });
+
+  // No fallback target (the failed agent IS the fallback, or none is configured).
+  if (!fallbackAgent) {
+    return terminate(task, taskStore, attempt.error);
+  }
+
+  // Re-queue onto the fallback agent. Back to PENDING rather than executed
+  // inline-regardless, so the General agent's own max_concurrent is still
+  // respected -- a fallback storm must not be able to oversubscribe it.
+  taskStore.update(task.id, {
+    status: TASK_STATUS.PENDING,
+    fallback_applied: true,
+    assigned_agent_id: fallbackAgent.id,
+    assigned_agent_name: fallbackAgent.name,
+    routing_note: note,
+    error: null,
+    completed_at: null,
+  });
+
+  emit(EVENTS.TASK_FALLBACK, toPublicTask(taskStore.get(task.id)));
+
+  // Attempt the fallback immediately so that a synchronous caller of
+  // POST /:id/execute receives the final outcome in one response rather than a
+  // task that is mysteriously PENDING again. Bounded to exactly one retry by
+  // the fallback_applied flag set above.
+  try {
+    return await executeTask(task.id, { registry, taskStore, rng, sleep });
+  } catch (err) {
+    if (err.code === 'AGENT_AT_CAPACITY') {
+      // The General agent is saturated right now. The task is correctly parked
+      // as PENDING and the dispatcher will pick it up when a slot frees.
+      return taskStore.get(task.id);
+    }
+    throw err;
+  }
+}
+
+function terminate(task, taskStore, message) {
+  finaliseFailure(task, taskStore, message);
   emit(EVENTS.TASK_FAILED, toPublicTask(taskStore.get(task.id)));
   return taskStore.get(task.id);
 }

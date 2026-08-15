@@ -63,15 +63,29 @@ describe('executeTask - success path', () => {
 });
 
 describe('executeTask - failure path', () => {
-  test('marks the task FAILED and records the error', async () => {
+  test('marks the task FAILED and records the error once fallback is exhausted', async () => {
     restore = instantExecution({ failureRate: 1, timeoutShare: 1 });
+    // Since the fallback-routing requirement landed, a failing specialist is
+    // re-routed to the General agent first; only when that also fails does the
+    // task terminate. See fallback.test.js for the routing itself.
     const task = await executeTask(ingest().id, deps());
 
     assert.equal(task.status, TASK_STATUS.FAILED);
     assert.match(task.error, /deadline/);
-    assert.equal(task.attempts.length, 1);
+    assert.equal(task.attempts.length, 2, 'specialist attempt + fallback attempt');
     assert.equal(task.attempts[0].outcome, 'TIMEOUT');
+    assert.equal(task.attempts[0].agent_id, 'agent-tax-01');
+    assert.equal(task.attempts[1].agent_id, 'agent-gen-00');
     assert.equal(task.result, null);
+  });
+
+  test('a GENERAL task has no fallback target, so one failure is terminal', async () => {
+    restore = instantExecution({ failureRate: 1, timeoutShare: 1 });
+    const task = await executeTask(ingest({ type: 'GENERAL' }).id, deps());
+
+    assert.equal(task.status, TASK_STATUS.FAILED);
+    assert.equal(task.attempts.length, 1);
+    assert.equal(task.fallback_applied, false);
   });
 
   test('still releases the slot and marks the agent ERROR', async () => {
