@@ -1,0 +1,21 @@
+// sample_tasks.json
+[
+  {
+    "title": "Q3 Corporate Tax Exemption Verification",
+    "type": "TAX",
+    "payload": "Review Schedule C filings for high-volume transactions.",
+    "priority": "HIGH"
+  },
+  {
+    "title": "Vendor Contract PII Audit",
+    "type": "SECURITY",
+    "payload": "Scan attached PDF text stream for unmasked SSNs and EINs.",
+    "priority": "MEDIUM"
+  },
+  {
+    "title": "Financial Ledger Discrepancy Analysis",
+    "type": "AUDIT",
+    "payload": "Cross-reference journal entries against bank reconciliation statements.",
+    "priority": "HIGH"
+  }
+]
