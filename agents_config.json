@@ -1,0 +1,35 @@
+// agents_config.json
+[
+  {
+    "id": "agent-tax-01",
+    "name": "Tax Compliance Agent",
+    "type": "TAX",
+    "max_concurrent": 3,
+    "cost_per_1k_tokens": 0.015,
+    "status": "IDLE"
+  },
+  {
+    "id": "agent-audit-02",
+    "name": "Audit Risk Scraper",
+    "type": "AUDIT",
+    "max_concurrent": 2,
+    "cost_per_1k_tokens": 0.020,
+    "status": "IDLE"
+  },
+  {
+    "id": "agent-sec-03",
+    "name": "Security & PII Scanner",
+    "type": "SECURITY",
+    "max_concurrent": 5,
+    "cost_per_1k_tokens": 0.008,
+    "status": "IDLE"
+  },
+  {
+    "id": "agent-gen-00",
+    "name": "General Fallback Agent",
+    "type": "GENERAL",
+    "max_concurrent": 10,
+    "cost_per_1k_tokens": 0.005,
+    "status": "IDLE"
+  }
+]
