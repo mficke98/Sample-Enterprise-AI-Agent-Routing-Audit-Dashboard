@@ -6,8 +6,12 @@ import { dirname, join } from 'node:path';
 import { config } from './config.js';
 import { AgentRegistry } from './domain/agentRegistry.js';
 import { TaskStore } from './domain/taskStore.js';
+import { Dispatcher } from './domain/dispatcher.js';
+import { startMetricsBroadcaster } from './domain/metricsBroadcaster.js';
 import { createTaskRoutes } from './routes/tasks.js';
 import { createAgentRoutes } from './routes/agents.js';
+import { createMetricsRoutes } from './routes/metrics.js';
+import { createEventRoutes } from './routes/events.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(here, '..', '..');
@@ -25,11 +29,21 @@ export const defaultPaths = {
  * matters a lot here, because agent concurrency counters are global mutable
  * state and a leaked slot in one test would silently break the next.
  */
-export function createApp({ paths = defaultPaths, registry, taskStore, dispatcher } = {}) {
+export function createApp({ paths = defaultPaths, registry, taskStore, dispatcher, autoDispatch } = {}) {
   const agentRegistry = registry ?? new AgentRegistry();
   if (!registry) agentRegistry.load(paths.agentsConfig);
 
   const store = taskStore ?? new TaskStore();
+
+  const shouldAutoDispatch = autoDispatch ?? config.autoDispatch;
+  const taskDispatcher = dispatcher ?? new Dispatcher({ registry: agentRegistry, taskStore: store });
+  if (shouldAutoDispatch) taskDispatcher.start();
+
+  const stopBroadcaster = startMetricsBroadcaster({
+    registry: agentRegistry,
+    taskStore: store,
+    dispatcher: taskDispatcher,
+  });
 
   const app = express();
   app.use(cors());
@@ -39,8 +53,14 @@ export function createApp({ paths = defaultPaths, registry, taskStore, dispatche
     res.json({ ok: true, uptime_s: Math.round(process.uptime()), config: publicConfig() });
   });
 
-  app.use('/api/tasks', createTaskRoutes({ registry: agentRegistry, taskStore: store, paths, dispatcher }));
-  app.use('/api/agents', createAgentRoutes({ registry: agentRegistry }));
+  const wiring = { registry: agentRegistry, taskStore: store, dispatcher: taskDispatcher };
+
+  const events = createEventRoutes(wiring);
+
+  app.use('/api/tasks', createTaskRoutes({ ...wiring, paths }));
+  app.use('/api/agents', createAgentRoutes(wiring));
+  app.use('/api/metrics', createMetricsRoutes(wiring));
+  app.use('/api/events', events.router);
 
   app.use((req, res) => {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: `No route for ${req.method} ${req.path}.` } });
@@ -50,7 +70,21 @@ export function createApp({ paths = defaultPaths, registry, taskStore, dispatche
 
   app.locals.registry = agentRegistry;
   app.locals.taskStore = store;
+  app.locals.dispatcher = taskDispatcher;
   app.locals.paths = paths;
+  /**
+   * Release timers, bus listeners and open streams.
+   *
+   * Ending the SSE responses is what allows server.close() to complete -- an
+   * open event stream is a connection that never finishes on its own, so
+   * without this a graceful shutdown hangs indefinitely.
+   */
+  app.locals.shutdown = () => {
+    taskDispatcher.stop();
+    stopBroadcaster();
+    events.closeAll();
+  };
+  app.locals.sseClientCount = events.clientCount;
   return app;
 }
 
