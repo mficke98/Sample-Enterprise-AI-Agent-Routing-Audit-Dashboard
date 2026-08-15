@@ -14,6 +14,8 @@ const server = app.listen(config.port, () => {
 /** Graceful shutdown so `npm run dev` restarts don't leave the port bound. */
 function shutdown(signal) {
   console.log(`\n[api] ${signal} received, shutting down.`);
+  // Stop the dispatcher first so no new work starts while we're closing.
+  app.locals.shutdown?.();
   server.close(() => process.exit(0));
   // Don't hang forever on a stuck connection.
   setTimeout(() => process.exit(1), 5000).unref();
