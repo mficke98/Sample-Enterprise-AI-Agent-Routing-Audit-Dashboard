@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Control Room &middot; Agent Routing &amp; Audit</title>
+    <script>
+      // Resolve the theme BEFORE first paint, otherwise a dark-default console
+      // flashes white for a frame on every reload. Dark is the default; an
+      // explicit stored choice wins.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('control-room:theme');
+          document.documentElement.setAttribute(
+            'data-theme',
+            stored === 'light' ? 'light' : 'dark'
+          );
+        } catch (err) {
+          // Private mode / storage disabled -- fall back to the default.
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

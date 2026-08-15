@@ -1,0 +1,1577 @@
+/* ==========================================================================
+   Control Room — dense observability console
+   --------------------------------------------------------------------------
+   Contents
+     1.  Palette / theming
+     2.  Reset & base
+     3.  Numeric primitives (the anti-jitter rules)
+     4.  Shared atoms: buttons, tags, chips, pills, banners
+     5.  App layout (desktop grid / tablet / mobile)
+     6.  Top bar
+     7.  Metrics
+     8.  Agent board
+     9.  Task form
+     10. Task stream & rows  (fallback treatment lives here)
+     11. Row detail / audit trail
+     12. Motion
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Palette
+   --------------------------------------------------------------------------
+   The full palette is declared three times on purpose:
+
+     a) on bare `:root`            -> light values, the no-JS / no-preference base
+     b) under prefers-color-scheme -> the OS preference, but only when the user
+                                      has NOT explicitly chosen light
+     c) under [data-theme="..."]   -> the in-app toggle, which must win in BOTH
+                                      directions (dark OS + light toggle, and
+                                      light OS + dark toggle)
+
+   Miss (c) and the toggle silently does nothing for half the users.
+   Dark is the product default; index.html stamps data-theme="dark" pre-paint.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-2: #edf1f7;
+  --border: #d6dee9;
+  --border-strong: #b9c4d4;
+  --text-1: #0e1420;
+  --text-2: #4a5666;
+  --text-3: #6b7688;
+  --focus: #0369a1;
+  --idle: #52606d;
+  --processing: #0369a1;
+  --processing-bg: #e0f2fe;
+  --success: #047857;
+  --success-bg: #d1fae5;
+  --error: #b91c1c;
+  --error-bg: #fee2e2;
+  --fallback: #6d28d9;
+  --fallback-bg: #ede9fe;
+  --fallback-hatch: #6d28d91a;
+  --prio-high: #92400e;
+  --prio-high-bg: #fef3c7;
+
+  color-scheme: light;
+
+  /* Non-colour tokens are theme-independent. */
+  --radius: 8px;
+  --radius-sm: 5px;
+  --gap: 12px;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0b0e14;
+    --surface: #12161f;
+    --surface-2: #1a2029;
+    --border: #232b37;
+    --border-strong: #364152;
+    --text-1: #e6eaf2;
+    --text-2: #97a3b6;
+    --text-3: #6b7688;
+    --focus: #7dd3fc;
+    --idle: #8b98ad;
+    --processing: #38bdf8;
+    --processing-bg: #0c2a3a;
+    --success: #34d399;
+    --success-bg: #0c2e24;
+    --error: #f87171;
+    --error-bg: #3a1416;
+    --fallback: #c084fc;
+    --fallback-bg: #2a1b3d;
+    --fallback-hatch: #c084fc1f;
+    --prio-high: #ffb020;
+    --prio-high-bg: #33240a;
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b0e14;
+  --surface: #12161f;
+  --surface-2: #1a2029;
+  --border: #232b37;
+  --border-strong: #364152;
+  --text-1: #e6eaf2;
+  --text-2: #97a3b6;
+  --text-3: #6b7688;
+  --focus: #7dd3fc;
+  --idle: #8b98ad;
+  --processing: #38bdf8;
+  --processing-bg: #0c2a3a;
+  --success: #34d399;
+  --success-bg: #0c2e24;
+  --error: #f87171;
+  --error-bg: #3a1416;
+  --fallback: #c084fc;
+  --fallback-bg: #2a1b3d;
+  --fallback-hatch: #c084fc1f;
+  --prio-high: #ffb020;
+  --prio-high-bg: #33240a;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-2: #edf1f7;
+  --border: #d6dee9;
+  --border-strong: #b9c4d4;
+  --text-1: #0e1420;
+  --text-2: #4a5666;
+  --text-3: #6b7688;
+  --focus: #0369a1;
+  --idle: #52606d;
+  --processing: #0369a1;
+  --processing-bg: #e0f2fe;
+  --success: #047857;
+  --success-bg: #d1fae5;
+  --error: #b91c1c;
+  --error-bg: #fee2e2;
+  --fallback: #6d28d9;
+  --fallback-bg: #ede9fe;
+  --fallback-hatch: #6d28d91a;
+  --prio-high: #92400e;
+  --prio-high-bg: #fef3c7;
+
+  color-scheme: light;
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* One focus treatment, everywhere, keyboard-only. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--processing-bg);
+  color: var(--text-1);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel__count {
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+/* Semantic colour utilities. Colour is always the third signal, after the
+   glyph and the word -- never the only one. */
+.tone-idle {
+  color: var(--idle);
+}
+.tone-processing {
+  color: var(--processing);
+}
+.tone-success {
+  color: var(--success);
+}
+.tone-error {
+  color: var(--error);
+}
+.tone-warn {
+  color: var(--prio-high);
+}
+.tone-fallback {
+  color: var(--fallback);
+}
+.tone-muted {
+  color: var(--text-3);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ta-right {
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   3. Numeric primitives  — the anti-jitter contract
+   --------------------------------------------------------------------------
+   Live figures are monospace, tabular, right-aligned, and occupy a reserved
+   width measured in `ch`. The reservation is what stops a value going from
+   `9 ms` to `1284 ms` from shoving every column to its right.
+
+   Units are fixed at the formatter (always `ms`, always 4dp USD), so the only
+   thing that ever changes here is the digits themselves.
+   -------------------------------------------------------------------------- */
+
+.num {
+  display: inline-block;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.num--w5 {
+  min-width: 5ch;
+}
+.num--w6 {
+  min-width: 6ch;
+} /* counts, `98.4%` */
+.num--w8 {
+  min-width: 8ch;
+} /* `1284 ms`, `$0.0143` */
+.num--w10 {
+  min-width: 10ch;
+} /* `$12.4471`, grouped tokens */
+
+/* --------------------------------------------------------------------------
+   4. Shared atoms
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px; /* >= 24px hit target, with room to spare */
+  padding: 5px 11px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    color 180ms ease-out;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--focus);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--processing-bg);
+  border-color: var(--processing);
+  color: var(--processing);
+  font-weight: 600;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+.btn--sm {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* A pressed toggle. `aria-pressed` carries the same fact for assistive tech. */
+.btn--on {
+  background: var(--processing-bg);
+  border-color: var(--processing);
+  color: var(--processing);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.tag--type {
+  background: var(--surface-2);
+}
+
+.tag--fallback {
+  color: var(--fallback);
+  border-color: var(--fallback);
+  background: var(--fallback-bg);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.chip--fallback {
+  color: var(--fallback);
+  background: var(--fallback-bg);
+  border: 1px solid var(--fallback);
+}
+
+/* Status pill. The fixed min-width is load-bearing: IDLE -> PROCESSING ->
+   ERROR must not resize the pill, or every neighbouring column twitches. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 11ch;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition:
+    color 180ms ease-out,
+    background-color 180ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.pill.tone-idle {
+  background: var(--surface-2);
+}
+.pill.tone-processing {
+  background: var(--processing-bg);
+}
+.pill.tone-success {
+  background: var(--success-bg);
+}
+.pill.tone-error {
+  background: var(--error-bg);
+}
+
+.pill__glyph {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.prio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 4ch;
+  color: var(--text-3);
+}
+
+.prio__glyph {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.prio--high {
+  color: var(--prio-high);
+}
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  border: 1px solid transparent;
+}
+
+.banner--error {
+  color: var(--error);
+  background: var(--error-bg);
+  border-color: var(--error);
+}
+
+.banner--ok {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.empty--inline {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.empty__title {
+  color: var(--text-2);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.empty__body {
+  font-size: 12.5px;
+  max-width: 44ch;
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   5. App layout
+   --------------------------------------------------------------------------
+   Desktop is a fixed-viewport console: the PAGE never scrolls, the regions
+   scroll internally. That is what makes it a control room rather than a
+   document -- the metrics and the agent board stay on screen while the stream
+   runs underneath them.
+
+   `min-height: 0` on the stream is the load-bearing declaration: a grid item's
+   default `min-height: auto` refuses to shrink below its content, so without
+   it the row track grows with the task list and the whole page scrolls
+   instead of the stream.
+
+   A `top` row is added to the spec grid to carry the header (which the theme
+   toggle and connection indicator need to live in).
+   -------------------------------------------------------------------------- */
+
+.app {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  min-height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'top'
+    'metrics'
+    'agents'
+    'form'
+    'stream';
+}
+
+.topbar {
+  grid-area: top;
+}
+.metrics {
+  grid-area: metrics;
+}
+.agents {
+  grid-area: agents;
+}
+.form {
+  grid-area: form;
+}
+.streamwrap {
+  grid-area: stream;
+  min-height: 0;
+}
+
+/* --- Desktop: >= 1200px --------------------------------------------------- */
+@media (min-width: 1200px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden; /* no page scroll; regions scroll internally */
+  }
+
+  .app {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'top top'
+      'metrics metrics'
+      'agents form'
+      'stream form';
+  }
+
+  .streamwrap {
+    min-height: 0;
+  }
+
+  .form {
+    position: sticky;
+    top: var(--gap);
+    align-self: start;
+    /* The page cannot scroll on desktop, so the form must be able to scroll
+       itself rather than run off the bottom of a short viewport. */
+    max-height: calc(100dvh - 2 * var(--gap));
+    overflow-y: auto;
+  }
+}
+
+/* --- Tablet: 768–1199px --------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .app {
+    min-height: 100dvh;
+  }
+
+  .stream {
+    max-height: 65dvh;
+  }
+}
+
+/* --- Mobile: < 768px ------------------------------------------------------ */
+@media (max-width: 767px) {
+  .app {
+    min-height: 100dvh;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .stream {
+    max-height: 70dvh;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. Top bar
+   -------------------------------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 2px;
+}
+
+.topbar__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar__mark {
+  color: var(--processing);
+  font-size: 12px;
+}
+
+.topbar__title {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.topbar__subtitle {
+  color: var(--text-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.topbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  transition: color 180ms ease-out;
+}
+
+.conn__dot {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.conn__label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  /* Reserved so `Live` -> `Reconnecting` does not resize the top bar. */
+  min-width: 12ch;
+}
+
+/* --------------------------------------------------------------------------
+   7. Metrics
+   -------------------------------------------------------------------------- */
+
+.metrics {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1199px) {
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+.metric {
+  padding: 10px 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.metric__label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.metric__value {
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+/* The headline figure inherits everything from .num -- including the right
+   alignment. A small number therefore sits with leading space rather than
+   snapping left: that gap IS the reserved width doing its job, and it is why
+   `9` growing to `1284` moves nothing. */
+
+.metric__sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-family: var(--mono);
+}
+
+.metric__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.metric__stat .num {
+  text-align: right;
+}
+
+.metric__stat--queue {
+  color: var(--text-3);
+  flex-basis: 100%;
+}
+
+.metric__stat--fallback {
+  color: var(--fallback);
+  flex-basis: 100%;
+}
+
+.metric__reason {
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-family: var(--sans);
+  /* Two lines of reason text, reserved, so a changing reason string does not
+     resize the card and shove the grid. */
+  min-height: 2.4em;
+}
+
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 180ms ease-out;
+}
+
+.health__glyph {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.health__word {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  /* CRITICAL is the longest word; reserve it so the card never reflows. */
+  min-width: 9ch;
+}
+
+/* --------------------------------------------------------------------------
+   8. Agent board
+   -------------------------------------------------------------------------- */
+
+.agents {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1199px) {
+  .agents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .agents {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+.agent {
+  padding: 10px 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  transition: border-color 180ms ease-out;
+}
+
+.agent--processing {
+  border-color: var(--border-strong);
+}
+
+.agent--error {
+  border-color: var(--error);
+}
+
+.agent__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent__ident {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+/* The ONLY looping animation in the app, and it is an 8px dot on four cards.
+   See §12. */
+.agent__pulse {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--idle);
+  transition: background-color 180ms ease-out;
+}
+
+.agent__pulse--on {
+  background: var(--processing);
+  animation: pulse 1600ms ease-in-out infinite;
+}
+
+.agent--error .agent__pulse {
+  background: var(--error);
+}
+
+.agent__name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent__rate {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.agent__tally {
+  display: flex;
+  gap: 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+/* --- capacity slots ------------------------------------------------------- */
+
+.capacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capacity__slots {
+  display: flex;
+  gap: 3px;
+}
+
+.slot {
+  width: 12px;
+  height: 6px;
+  border-radius: 1px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.slot--filled {
+  background: var(--processing);
+  border-color: var(--processing);
+}
+
+/* Saturation is the state that predicts queue growth, so it gets its own
+   colour AND its own word rather than a subtle shade change. */
+.capacity__slots--full .slot--filled {
+  background: var(--prio-high);
+  border-color: var(--prio-high);
+}
+
+.capacity__label {
+  font-size: 11.5px;
+  color: var(--text-2);
+  min-width: 5ch;
+}
+
+.capacity__flag {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--prio-high);
+  background: var(--prio-high-bg);
+  border: 1px solid var(--prio-high);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+/* --------------------------------------------------------------------------
+   9. Task form
+   -------------------------------------------------------------------------- */
+
+.form {
+  padding: 0;
+  overflow: hidden;
+}
+
+.form__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: default;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.form__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Above mobile the form is always open, so the disclosure affordance would be
+   a lie. The <summary> stays in the DOM as the panel heading. */
+@media (min-width: 768px) {
+  .form__chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .form__summary {
+    cursor: pointer;
+    min-height: 40px;
+  }
+
+  .form__chevron {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--text-2);
+    transition: transform 180ms ease-out;
+  }
+
+  .form[open] .form__chevron {
+    transform: rotate(180deg);
+  }
+}
+
+.taskform {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 11px;
+}
+
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.field input,
+.field select,
+.field textarea {
+  min-height: 32px;
+  padding: 6px 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  width: 100%;
+  transition:
+    border-color 180ms ease-out,
+    background-color 180ms ease-out;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 68px;
+  font-family: inherit;
+}
+
+.field input[aria-invalid='true'],
+.field select[aria-invalid='true'],
+.field textarea[aria-invalid='true'] {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+
+.field__hint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.field__error {
+  font-size: 11.5px;
+  color: var(--error);
+  display: flex;
+  gap: 5px;
+}
+
+.taskform__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------------
+   10. Task stream
+   -------------------------------------------------------------------------- */
+
+.streamwrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.stream__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.stream__controls {
+  display: flex;
+  gap: 7px;
+}
+
+/* The scrolling region.
+   `min-height: 0` lets it shrink inside the grid; `overscroll-behavior:
+   contain` stops a flick at the end of the log from scrolling the page behind
+   it (and on desktop the page cannot scroll at all, which would otherwise feel
+   like a dead input). */
+.stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Floats over the list rather than sitting in flow, so its appearance does not
+   shift the rows the user is reading. */
+.stream__new {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--processing-bg);
+  color: var(--processing);
+  border: 1px solid var(--processing);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+.stream__paused {
+  padding: 5px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--prio-high);
+  background: var(--prio-high-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- rows ----------------------------------------------------------------- */
+
+.row {
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  animation: rowIn 160ms var(--ease) both;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row__main {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns:
+    max-content max-content max-content
+    minmax(0, 1fr) max-content max-content 14px;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 12px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 180ms ease-out;
+}
+
+.row__main:hover {
+  background: var(--surface-2);
+}
+
+.row__time {
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 8ch;
+}
+
+.row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row__titleline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row__title {
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row__agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  min-width: 0;
+}
+
+.row__agentname {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row__latency,
+.row__cost {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.row__chevron {
+  color: var(--text-3);
+  font-size: 10px;
+  text-align: center;
+}
+
+/* === FALLBACK ROWS =========================================================
+   A re-routed task carries FIVE redundant signals, because this is the one
+   thing on screen that must never be missed:
+
+     1. a 3px left border in the fallback colour
+     2. a 45deg hatch across the row background
+     3. the `↩ FALLBACK` chip
+     4. the routing trace, `TAX ⟶ GENERAL`, original struck through
+     5. a plain-language sub-line naming the agent and the reason
+
+   The hatch is doing specific work: it is a TEXTURE, so it survives grayscale
+   printing, colour-vision deficiency, and a washed-out projector -- every
+   condition under which signals 1 and 3 quietly vanish.
+   ========================================================================== */
+
+.row--fallback {
+  border-left-color: var(--fallback);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--fallback-hatch) 0 2px,
+    transparent 2px 8px
+  );
+}
+
+.route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.route__from {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.route__arrow {
+  color: var(--fallback);
+}
+
+.route__to {
+  color: var(--fallback);
+  font-weight: 700;
+}
+
+.row__reroute {
+  font-size: 11px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row--expanded {
+  background-color: var(--surface-2);
+}
+
+.row__detail {
+  border-top: 1px dashed var(--border);
+  background: var(--surface);
+}
+
+/* --------------------------------------------------------------------------
+   11. Row detail / audit trail
+   -------------------------------------------------------------------------- */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px 16px;
+}
+
+.detail__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  font-size: 11.5px;
+}
+
+.detail__facts dt {
+  color: var(--text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail__facts dd {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.detail__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail__heading {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.detail__count {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.detail__payload,
+.detail__summary {
+  font-size: 12.5px;
+  color: var(--text-1);
+  max-width: 90ch;
+}
+
+.detail__note {
+  font-size: 12px;
+  color: var(--fallback);
+  font-family: var(--mono);
+}
+
+.detail__empty {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.detail__error {
+  font-size: 12.5px;
+  color: var(--error);
+}
+
+.detail__resultmeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.detail__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.detail__runerror {
+  font-size: 12px;
+  color: var(--error);
+}
+
+/* Wide tables scroll inside their own box; the page must never scroll
+   sideways. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.attempts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.attempts th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.attempts td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text-2);
+}
+
+.attempts tr:last-child td {
+  border-bottom: none;
+}
+
+.attempts__agent {
+  display: block;
+  color: var(--text-1);
+  font-weight: 550;
+}
+
+.attempts__type {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.attempts__error {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--error);
+  max-width: 40ch;
+}
+
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.findings li {
+  display: flex;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  max-width: 90ch;
+}
+
+.findings__bullet {
+  color: var(--processing);
+  flex: none;
+}
+
+/* --------------------------------------------------------------------------
+   12. Motion
+   --------------------------------------------------------------------------
+   Rules, all of them deliberate:
+
+   * Only `opacity`, `transform`, `color`, `background-color` and
+     `border-color` are ever animated. Animating `height`/`width`/`margin`/
+     `top` forces layout on every frame and drops the whole console below
+     60fps once the stream is busy.
+   * No `transition: all` anywhere -- it animates properties you did not think
+     about, including ones that trigger layout.
+   * Terminal-state feedback is a ONE-SHOT decay to transparent, so a long
+     stream does not accumulate dozens of permanently glowing rows.
+   * Failure and fallback decay slower (900ms) than success (600ms): the
+     things worth noticing get more of your attention, not less.
+   * Nothing flashes faster than 1Hz; the only loop in the app is the 1600ms
+     agent pulse.
+   -------------------------------------------------------------------------- */
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes decaySuccess {
+  from {
+    background-color: var(--success-bg);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes decayFailure {
+  from {
+    background-color: var(--error-bg);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* Applied to the row's inner button rather than the row itself: the row owns
+   the fallback hatch and the insert animation, and re-declaring `animation` on
+   the same element would re-run the insert every time a flash ended. */
+.row--decay-completed .row__main {
+  animation: decaySuccess 600ms ease-out both;
+}
+
+.row--decay-failed .row__main {
+  animation: decayFailure 900ms ease-out both;
+}
+
+/* Reduced motion: remove animation entirely rather than shortening it. Nothing
+   is lost, because every state is already encoded as a glyph and a word --
+   motion was only ever the fourth, redundant signal. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
