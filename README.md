@@ -21,10 +21,24 @@ npm run dev
 
 Use `npm ci` rather than `npm install`. It installs strictly from `package-lock.json`, fails if the lockfile and `package.json` disagree, and **verifies the SRI integrity hash of every package** — `npm install` will silently rewrite the lockfile instead.
 
-Run the tests:
+Run the tests — **505 across both suites** (218 backend, 287 frontend):
 
 ```bash
 npm test
+```
+
+Either half on its own, or a frontend coverage report:
+
+```bash
+npm run test:server
+```
+
+```bash
+npm run test:web
+```
+
+```bash
+npm run test:coverage
 ```
 
 ---
@@ -161,7 +175,7 @@ Both `agents_config.json` and `sample_tasks.json` open with a `// filename` comm
 npm test
 ```
 
-218 tests across 55 suites, no test-framework dependency. See **[TESTING.md](TESTING.md)** for a manual walkthrough that exercises fallback, priority ordering, capacity limits and the live stream by hand.
+**505 tests.** The backend runs 218 across 55 suites on Node's built-in runner with no test-framework dependency at all; the frontend runs 287 on Vitest + Testing Library at **98.8% statement / 94.3% branch coverage**. See **[TESTING.md](TESTING.md)** for a manual walkthrough that exercises fallback, priority ordering, capacity limits and the live stream by hand.
 
 ## Project layout
 
@@ -172,4 +186,5 @@ server/src/
   lib/         jsonc (comment-tolerant loader) · rng (seedable) · bus
 server/test/   218 tests
 web/src/       React dashboard (components · hooks · lib)
+web/test/      287 tests
 ```
