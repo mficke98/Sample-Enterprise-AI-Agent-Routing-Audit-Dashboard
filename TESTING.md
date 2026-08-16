@@ -14,31 +14,61 @@ npm ci
 npm test
 ```
 
-Expected:
+This runs both halves. Expected — **505 tests**:
 
 ```
-# tests 218
-# suites 55
+# tests 218        <- backend  (node:test)
 # pass 218
 # fail 0
+
+ Test Files  15 passed (15)      <- frontend (vitest)
+      Tests  287 passed (287)
 ```
 
-Run one file at a time when you want to read the output:
+Either half alone, or a frontend coverage report:
+
+```bash
+npm run test:server
+```
+
+```bash
+npm run test:web
+```
+
+```bash
+npm run test:coverage
+```
+
+Coverage currently sits at **98.8% statements / 94.3% branches** across the dashboard source.
+
+Run one backend file at a time when you want to read the output:
 
 ```bash
 cd server && node --test --test-concurrency=1 test/fallback.test.js
 ```
 
-Files worth reading, in order of how much they tell you:
+### Backend files, in order of how much they tell you
 
 | File | What it proves |
 |---|---|
-| `test/fallback.test.js` | The curveball: re-routing, both loop guards, cost of both attempts, the 60-task no-loop stress test |
-| `test/dispatcher.test.js` | Priority ordering, capacity caps, head-of-line blocking, a 100-task burst |
-| `test/execution.test.js` | Slot accounting, crash safety, state guards, 20 concurrent tasks on a 5-slot agent |
-| `test/metrics.test.js` | Zero-state safety (no NaN), health thresholds, p95 against a known ramp |
-| `test/sse.test.js` | Live push, listener cleanup across reconnects, shutdown safety |
-| `test/jsonc.test.js` | That the supplied seed files are genuinely invalid JSON, and load anyway |
+| `server/test/fallback.test.js` | The curveball: re-routing, both loop guards, cost of both attempts, the 60-task no-loop stress test |
+| `server/test/dispatcher.test.js` | Priority ordering, capacity caps, head-of-line blocking, a 100-task burst |
+| `server/test/execution.test.js` | Slot accounting, crash safety, state guards, 20 concurrent tasks on a 5-slot agent |
+| `server/test/metrics.test.js` | Zero-state safety (no NaN), health thresholds, p95 against a known ramp |
+| `server/test/sse.test.js` | Live push, listener cleanup across reconnects, shutdown safety |
+| `server/test/jsonc.test.js` | That the supplied seed files are genuinely invalid JSON, and load anyway |
+
+### Frontend files
+
+| File | What it proves |
+|---|---|
+| `web/test/useEventStream.test.jsx` | The live-data path: snapshot hydration, in-place row updates (no reordering), the row cap under a burst, reconnect re-hydration, malformed frames not killing the stream |
+| `web/test/TaskRow.test.jsx` | All five fallback signals render, the one-shot terminal flash fires on transition but not on first paint |
+| `web/test/MetricsPanel.test.jsx` | The empty system shows dashes and `HEALTHY`, never `NaN` and never a catastrophic `0.0%` |
+| `web/test/TaskForm.test.jsx` | Per-field API errors bind to their inputs via `aria-invalid`/`aria-describedby`; unknown types are accepted |
+| `web/test/StreamPanel.test.jsx` | Pause genuinely freezes the list, the fallback filter, one-at-a-time row expansion |
+| `web/test/App.test.jsx` | End-to-end: one EventSource for the whole dashboard, assertive alerts fire only on the transition into `CRITICAL` |
+| `web/test/hooks.test.jsx` | Theme persistence (including storage throwing), media-query cleanup, announcement coalescing under 50 frames |
 
 Also check the supply chain:
 

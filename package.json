@@ -13,8 +13,11 @@
     "dev:server": "npm run dev --workspace server",
     "dev:web": "npm run dev --workspace web",
     "start": "npm run start --workspace server",
-    "test": "npm test --workspace server",
-    "build": "npm run build --workspace web"
+    "test": "npm run test:server && npm run test:web",
+    "build": "npm run build --workspace web",
+    "test:server": "npm test --workspace server",
+    "test:web": "npm test --workspace web",
+    "test:coverage": "npm run test:coverage --workspace web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
